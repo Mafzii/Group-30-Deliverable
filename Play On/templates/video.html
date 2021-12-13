@@ -25,6 +25,7 @@
             {% else: %}
             <a class='likecom' href="{{ url_for('like', video_id=video_details.video_id) }}">Like</a>
             <a class='likecom' href="#">Comment</a>
+            <a class='likecom' href="{{ url_for('subscribe', client_id=video_details.uploader_id, video_id = video_details.video_id) }}">Subscribe User</a>
             {% endif %}
         </p>
     </form>

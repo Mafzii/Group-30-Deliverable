@@ -258,6 +258,31 @@ def like(video_id):
 
     return redirect(url_for('video', video_id=video_details['video_id']))
 
+@app.route('/subscribe/<client_id>/<video_id>')
+@check_logged_in
+def subscribe(client_id, video_id):
+    cur = mysql.connection.cursor()
+    result = cur.execute("SELECT * FROM clients WHERE client_id = %s", [client_id])
+    client_details = cur.fetchone()
+    
+    result_vid = cur.execute("SELECT * FROM videos WHERE video_id = %s", [video_id])
+    video_details = cur.fetchone()
+
+    subscribers = client_details['num_subs']
+    subscribers+=1
+
+    result_subs = cur.execute("SELECT * FROM subscribers WHERE client_id = %s AND subscriber_id = %s", ([client_id], [session['client_id']]))
+    if result_subs == 0:
+        cur.execute("UPDATE clients SET num_subs = %s WHERE client_id = %s", (subscribers, client_id))
+        cur.execute("INSERT INTO subscribers(client_id, subscriber_id) VALUES (%s, %s)", ([client_id], [session['client_id']]))
+        mysql.connection.commit()
+
+    cur.close()
+    flash("Subscribed")
+
+    return redirect(url_for('video', video_id=video_details['video_id']))
+
+
 def check_is_admin(arg):
     @wraps(arg)
     def wrap(*args, **kwargs):
