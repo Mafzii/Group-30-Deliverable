@@ -9,7 +9,7 @@ from werkzeug.utils import redirect, secure_filename
 import yaml
 from datetime import datetime
 
-app = Flask(__name__, static_folder='static')
+app = Flask(__name__)
 
 
 db = yaml.safe_load(open('db.yaml'))
@@ -20,13 +20,15 @@ app.config['MYSQL_PASSWORD'] = db['mysql_password']
 app.config['MYSQL_DB'] = db['mysql_db']
 app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
 
-app.config['UPLOAD_FOLDER'] = 'static/uploads/'
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
 
 mysql = MySQL(app)
+
 
 @app.route('/')
 def startpage():
     return render_template('start.html')
+
 
 @app.route('/register', methods=['GET','POST'])
 def register():
@@ -38,7 +40,7 @@ def register():
         password = client_details['password']
 
         if login_id == '' or password == '' or name == '':
-            flash('No input detected','message')
+            flash('No input detected', 'message')
             return render_template('register.html')
 
         cur = mysql.connection.cursor()
@@ -48,6 +50,7 @@ def register():
         return redirect('/')
 
     return render_template("register.html") 
+
 
 @app.route('/login', methods=['GET','POST'])
 def login():
@@ -81,6 +84,7 @@ def login():
             return render_template('login.html')
 
     return render_template('login.html')
+
 
 @app.route('/login/admin', methods=['GET','POST'])
 def login_admin():
@@ -117,6 +121,7 @@ def login_admin():
 
     return render_template('login_admin.html')
 
+
 def check_logged_in(arg):
     @wraps(arg)
     def wrap(*args, **kwargs):
@@ -127,16 +132,19 @@ def check_logged_in(arg):
             return redirect('/')
     return wrap
 
+
 @app.route('/logout')
 @check_logged_in
 def logout():
     session.clear()
-    return redirect(url_for('startpage'))  
+    return redirect(url_for('startpage'))
+
 
 @app.route('/home')
 @check_logged_in
 def homepage():
     cur = mysql.connection.cursor()
+
     result = cur.execute("SELECT * FROM videos ORDER BY upload_date DESC")
     videos = cur.fetchall()
 
@@ -147,13 +155,14 @@ def homepage():
         cur.close()
         return render_template('home.html')
 
+
 @app.route('/upload_video', methods=['POST'])
 @check_logged_in
 def upload_video(): 
     if 'file' not in request.files:
         flash('No file')
         return redirect('/home')
-    
+
     file = request.files['file']
     filename = secure_filename(file.filename)
     file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
@@ -171,37 +180,16 @@ def upload_video():
 
     return render_template('profile.html', login_id=session['login_id'], filename=filename)
 
-@app.route('/search', methods=['POST'])
-@check_logged_in
-def search():
-    search = request.form
-    search_request = search['search']
-    search_request = search_request.split(" ")
-    videos = ()
-
-    if search_request == "":
-        flash('Please enter search parameters')
-        return redirect(url_for('homepage'))
-
-    cur = mysql.connection.cursor()
-    for i in range(len(search_request)):
-        search_request[i] = "%" + search_request[i] + "%"
-        cur.execute("SELECT * FROM videos WHERE title LIKE %s OR login_id LIKE %s ORDER BY upload_date DESC", (search_request[i], search_request[i]))
-        result = cur.fetchall()
-        videos = videos + result
-    cur.close()
-
-    return render_template('home.html', videos=videos)
-
 @app.route('/display_video/<filename>')
 @check_logged_in
 def display_video(filename):
-    return redirect(url_for('static', filename='uploads/' + filename), code=301)
+    return redirect(url_for('static', filename='/uploads'+filename), code=301)
 
 @app.route('/video/<video_id>')
 @check_logged_in
 def video(video_id):
     cur = mysql.connection.cursor()
+
     result = cur.execute("SELECT * FROM videos WHERE video_id = %s", [video_id])
     video_details = cur.fetchone()
     cur.close()
@@ -218,6 +206,7 @@ def profile(login_id):
 
     return render_template('profile.html', login_id=login_id, videos=videos)
 
+
 @app.route('/like/<video_id>')
 @check_logged_in
 def like(video_id):
@@ -233,16 +222,33 @@ def like(video_id):
         cur.execute("UPDATE videos SET num_likes = %s WHERE video_id = %s", (likes, video_id))
         cur.execute("INSERT INTO likes(video_id, client_id) VALUES (%s, %s)", (video_id, session['client_id']))
         mysql.connection.commit()
-        flash('Liked video')
-    else:
-        likes-=2
-        cur.execute("UPDATE videos SET num_likes = %s WHERE video_id = %s", (likes, video_id))
-        cur.execute("DELETE FROM likes WHERE video_id = %s AND client_id = %s", (video_id, session['client_id']))
-        mysql.connection.commit()
-        flash('Unliked video')
-
+    
     cur.close()
 
+    return redirect(url_for('video', video_id=video_details['video_id']))
+
+@app.route('/subscribe/<client_id>/<video_id>')
+@check_logged_in
+def subscribe(client_id, video_id):
+    cur = mysql.connection.cursor()
+    result = cur.execute("SELECT * FROM clients WHERE client_id = %s", [client_id])
+    client_details = cur.fetchone()
+    
+    result_vid = cur.execute("SELECT * FROM videos WHERE video_id = %s", [video_id])
+    video_details = cur.fetchone()
+
+    subscribers = client_details['num_subs']
+    subscribers+=1
+
+    result_subs = cur.execute("SELECT * FROM subscribers WHERE client_id = %s AND subscriber_id = %s", ([client_id], [session['client_id']]))
+    if result_subs == 0:
+        cur.execute("UPDATE clients SET num_subs = %s WHERE client_id = %s", (subscribers, client_id))
+        cur.execute("INSERT INTO subscribers(client_id, subscriber_id) VALUES (%s, %s)", ([client_id], [session['client_id']]))
+        mysql.connection.commit()
+
+    cur.close()
+    flash("Subscribed")
+    
     return redirect(url_for('video', video_id=video_details['video_id']))
 
 def check_is_admin(arg):
@@ -277,6 +283,7 @@ def ban(client_id):
     cur.close()
     
     return redirect(url_for('homepage'))
+
 
 if __name__ == "__main__":
     app.secret_key = "WBDJSBALFkjdabd"

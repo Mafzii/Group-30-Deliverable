@@ -29,13 +29,8 @@ Profile
     <div style="margin: 10px auto;">
         <br>
         <video controls="controls" preload="auto">
-            <source src="{{ url_for('display_video', filename=filename) }}" type="video/webm"></source>
+            <source src="{{ url_for('display_video', filename=filename) }}" type="video/mp4"></source>
         </video>
-    </div>
-
-    <div style="margin: 10px auto;">
-        <br>
-        <img src="{{ url_for('display_video', filename=filename) }}" alt="image">
     </div>
     {% endif %}
 </div>
